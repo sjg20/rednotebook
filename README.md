@@ -59,10 +59,13 @@ entries from all machines are merged together.
 3. Tick **Enable sync**.
 4. Paste the remote URL into **Remote URL**
    (e.g. `git@github.com:you/journal.git`).
-5. Leave **Branch** empty to use the default branch, or enter a branch
+5. Click **Test** to verify the URL is reachable and authentication
+   works. This does not modify anything.
+6. Leave **Branch** empty to use the default branch, or enter a branch
    name.
-6. Leave **Sync automatically on save** ticked (recommended).
-7. Click **OK**.
+7. Leave **Sync automatically on save** ticked (recommended).
+8. Click **OK**. RedNotebook will initialise the local git repo, set
+   the remote and perform the first sync immediately.
 
 RedNotebook will initialise a git repository inside your journal data
 directory, configure the remote and start syncing.

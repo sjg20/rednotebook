@@ -354,6 +354,49 @@ class TestSync:
             assert data[2]["text"] == "New day"
 
 
+class TestTestRemote:
+    def test_empty_url(self):
+        ok, message = sync.test_remote("")
+        assert not ok
+        assert "No URL" in message
+
+    def test_local_bare_repo(self):
+        """Test against a real (local) bare repo."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            remote_dir = os.path.join(tmpdir, "remote.git")
+            os.makedirs(remote_dir)
+            _git(remote_dir, "init", "--bare")
+
+            ok, message = sync.test_remote(remote_dir)
+            assert ok
+            assert "empty" in message.lower() or "branch" in message.lower()
+
+    def test_local_repo_with_branches(self):
+        """A repo with branches reports the branch count."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            remote_dir = os.path.join(tmpdir, "remote.git")
+            local_dir = os.path.join(tmpdir, "local")
+
+            os.makedirs(remote_dir)
+            _git(remote_dir, "init", "--bare")
+
+            _make_repo(local_dir)
+            _git(local_dir, "remote", "add", "origin", remote_dir)
+            _write_month(local_dir, "2024-03.txt", {1: {"text": "hi"}})
+            _git(local_dir, "add", "-A")
+            _git(local_dir, "commit", "-m", "data")
+            _git(local_dir, "push", "-u", "origin", "master")
+
+            ok, message = sync.test_remote(remote_dir)
+            assert ok
+            assert "1" in message  # 1 branch
+
+    def test_nonexistent_url(self):
+        ok, message = sync.test_remote("/nonexistent/path/to/repo.git")
+        assert not ok
+        assert message  # Should have an error message
+
+
 class TestPullOnOpen:
     def test_not_a_git_repo(self):
         """Should return True for non-git directories."""

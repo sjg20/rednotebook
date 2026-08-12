@@ -414,16 +414,21 @@ class OptionsManager:
         )
         self.sync_options.append(self.sync_enabled_option)
 
-        self.sync_options.append(
-            TextOption(
-                _("Remote URL:"),
-                "syncRemoteUrl",
-                tooltip=_(
-                    "Git remote URL (e.g. git@github.com:user/journal.git "
-                    "or https://github.com/user/journal.git)"
-                ),
-            )
+        self.sync_url_option = TextOption(
+            _("Remote URL:"),
+            "syncRemoteUrl",
+            tooltip=_(
+                "Git remote URL (e.g. git@github.com:user/journal.git "
+                "or https://github.com/user/journal.git)"
+            ),
         )
+        test_button = Gtk.Button(_("Test"))
+        test_button.set_tooltip_text(
+            _("Check the URL is reachable without modifying anything")
+        )
+        test_button.connect("clicked", self._on_test_remote)
+        self.sync_url_option.pack_start(test_button, False, False, 0)
+        self.sync_options.append(self.sync_url_option)
 
         self.sync_options.append(
             TextOption(
@@ -486,17 +491,57 @@ class OptionsManager:
 
         self._apply_sync_settings()
 
+    def _on_test_remote(self, widget):
+        """Test the URL currently in the sync URL field."""
+        url = self.sync_url_option.get_value().strip()
+        ok, message = sync.test_remote(url)
+
+        dialog = Gtk.MessageDialog(
+            transient_for=self.dialog.dialog,
+            modal=True,
+            message_type=Gtk.MessageType.INFO if ok else Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text=_("Remote reachable") if ok else _("Remote test failed"),
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
+
     def _apply_sync_settings(self):
-        """Initialise or update the git sync repo based on current settings."""
+        """Initialise or update the git sync repo and run a sync now."""
         if not self.config.read("syncEnabled"):
             return
 
         data_dir = self.journal.dirs.data_dir
 
         if not sync.init_repo(data_dir):
-            logging.error("Failed to initialise sync repository")
+            self.journal.show_message(
+                _("Sync setup failed - could not initialise git repository"),
+                error=True,
+            )
             return
 
         remote_url = self.config.read("syncRemoteUrl", "")
-        if remote_url:
-            sync.set_remote(data_dir, remote_url)
+        if not remote_url:
+            self.journal.show_message(
+                _("Sync is enabled but no remote URL is set. "
+                  "Nothing will be pushed until you add one."),
+                error=True,
+            )
+            return
+
+        sync.set_remote(data_dir, remote_url)
+
+        # Run a full sync now so the user does not have to save + reopen
+        # preferences to trigger the first push.
+        branch = self.config.read("syncBranch") or None
+        if sync.sync(data_dir, branch=branch):
+            self.journal.show_message(
+                _("Sync completed - journal pushed to %s") % remote_url,
+                error=False,
+            )
+        else:
+            self.journal.show_message(
+                _("Sync failed - check the log for details"),
+                error=True,
+            )

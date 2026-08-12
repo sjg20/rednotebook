@@ -402,6 +402,47 @@ def push(data_dir, remote="origin", branch=None):
         return False
 
 
+def test_remote(url, timeout=15):
+    """Test whether a git remote URL is reachable and authorised.
+
+    Runs 'git ls-remote' against the URL without touching any local
+    state. This validates the URL is well-formed, the network can
+    reach it, and any required authentication succeeds.
+
+    Args:
+        url: Git remote URL to test.
+        timeout: Seconds to wait before giving up.
+
+    Returns:
+        Tuple (success: bool, message: str). The message is either a
+        summary of what was found (e.g. number of refs) on success, or
+        the git error output on failure.
+    """
+    if not url:
+        return False, "No URL provided"
+
+    cmd = ["git", "ls-remote", "--heads", url]
+    logging.debug("sync: testing remote with %s", " ".join(cmd))
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"Timed out after {timeout}s"
+    except FileNotFoundError:
+        return False, "git command not found - please install git"
+
+    if result.returncode == 0:
+        refs = [line for line in result.stdout.strip().splitlines() if line]
+        if refs:
+            return True, f"Reachable ({len(refs)} branch(es) on remote)"
+        return True, "Reachable (empty repository)"
+
+    err = result.stderr.strip() or result.stdout.strip() or "unknown error"
+    return False, err
+
+
 def sync(data_dir, remote="origin", branch=None):
     """Perform a full sync cycle: commit, pull+merge, push.
 
